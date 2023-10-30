@@ -146,10 +146,7 @@ function buildNode(
       } else {
         node = doc.createElement(tagName);
       }
-      // if (tagName === 'img') {
-      //   console.log('img', n, node, n.attributes, document);
-      //   console.log('img', doc, hackCss, cache);
-      // }
+
       /**
        * Attribute names start with `rr_` are internal attributes added by rrweb.
        * They often overwrite other attributes on the element.
@@ -267,6 +264,16 @@ function buildNode(
           ) {
             const path = new URL(n.attributes.href, options.baseUrl).toString();
             n.attributes.href = path;
+          } else if (
+            tagName === 'link' &&
+            (n.attributes.rel === 'preload' ||
+              n.attributes.rel === 'modulepreload') &&
+            typeof n.attributes.href === 'string' &&
+            n.attributes.href.endsWith('.js')
+          ) {
+            const path = new URL(n.attributes.href, options.baseUrl).toString();
+            n.attributes.href = path;
+            // ignore
           } else {
             node.setAttribute(name, value.toString());
           }
