@@ -1,3 +1,4 @@
+import { link } from 'fs';
 import { parse } from './css';
 import {
   serializedNodeWithId,
@@ -124,6 +125,7 @@ function buildNode(
     doc: Document;
     hackCss: boolean;
     cache: BuildCache;
+    baseUrl?: string;
   },
 ): Node | null {
   const { doc, hackCss, cache } = options;
@@ -144,6 +146,10 @@ function buildNode(
       } else {
         node = doc.createElement(tagName);
       }
+      // if (tagName === 'img') {
+      //   console.log('img', n, node, n.attributes, document);
+      //   console.log('img', doc, hackCss, cache);
+      // }
       /**
        * Attribute names start with `rr_` are internal attributes added by rrweb.
        * They often overwrite other attributes on the element.
@@ -238,16 +244,29 @@ function buildNode(
             n.attributes.href.endsWith('.js')
           ) {
             // ignore
-          } else if (
-            tagName === 'img' &&
-            n.attributes.srcset &&
-            n.attributes.rr_dataURL
-          ) {
+          } else if (tagName === 'img' && n.attributes.src) {
             // backup original img srcset
-            node.setAttribute(
-              'rrweb-original-srcset',
-              n.attributes.srcset as string,
-            );
+            const path = new URL(
+              n.attributes.src.toString(),
+              options.baseUrl,
+            ).toString();
+
+            node.setAttribute('rrweb-original-srcset', path);
+
+            n.attributes.src = path;
+
+            for (const key in n.attributes) {
+              node.setAttribute(key, n.attributes[key]?.toString() || '');
+            }
+          } else if (
+            tagName === 'style' &&
+            value === 'stylesheet' &&
+            n.attributes.rel === 'stylesheet' &&
+            typeof n.attributes.href === 'string' &&
+            !n.attributes.href.startsWith('http')
+          ) {
+            const path = new URL(n.attributes.href, options.baseUrl).toString();
+            n.attributes.href = path;
           } else {
             node.setAttribute(name, value.toString());
           }
@@ -354,6 +373,7 @@ export function buildNodeWithSN(
     mirror: Mirror;
     skipChild?: boolean;
     hackCss: boolean;
+    baseUrl?: string;
     /**
      * This callback will be called for each of this nodes' `.childNodes` after they are appended to _this_ node.
      * Caveat: This callback _doesn't_ get called when this node is appended to the DOM.
@@ -369,6 +389,7 @@ export function buildNodeWithSN(
     hackCss = true,
     afterAppend,
     cache,
+    baseUrl,
   } = options;
   /**
    * Add a check to see if the node is already in the mirror. If it is, we can skip the whole process.
@@ -383,7 +404,8 @@ export function buildNodeWithSN(
     // For safety concern, check if the node in mirror is the same as the node we are trying to build
     if (isNodeMetaEqual(meta, n)) return mirror.getNode(n.id);
   }
-  let node = buildNode(n, { doc, hackCss, cache });
+
+  let node = buildNode(n, { doc, hackCss, cache, baseUrl: options.baseUrl });
   if (!node) {
     return null;
   }
@@ -435,6 +457,7 @@ export function buildNodeWithSN(
         hackCss,
         afterAppend,
         cache,
+        baseUrl,
       });
       if (!childNode) {
         console.warn('Failed to rebuild', childN);
@@ -523,6 +546,7 @@ function rebuild(
     afterAppend?: (n: Node, id: number) => unknown;
     cache: BuildCache;
     mirror: Mirror;
+    baseUrl?: string;
   },
 ): Node | null {
   const {
@@ -532,6 +556,7 @@ function rebuild(
     afterAppend,
     cache,
     mirror = new Mirror(),
+    baseUrl,
   } = options;
   const node = buildNodeWithSN(n, {
     doc,
@@ -540,6 +565,7 @@ function rebuild(
     hackCss,
     afterAppend,
     cache,
+    baseUrl,
   });
   visit(mirror, (visitedNode) => {
     if (onVisit) {
@@ -548,6 +574,12 @@ function rebuild(
     handleScroll(visitedNode, mirror);
   });
   return node;
+}
+
+function getRootId(doc: Document, mirror: Mirror): number | undefined {
+  if (!mirror.hasNode(doc)) return undefined;
+  const docId = mirror.getId(doc);
+  return docId === 1 ? undefined : docId;
 }
 
 export default rebuild;
