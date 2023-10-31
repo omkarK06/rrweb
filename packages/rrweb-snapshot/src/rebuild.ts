@@ -1,4 +1,3 @@
-import { link } from 'fs';
 import { parse } from './css';
 import {
   serializedNodeWithId,
@@ -241,6 +240,16 @@ function buildNode(
             n.attributes.href.endsWith('.js')
           ) {
             // ignore
+          } else if (
+            tagName === 'img' &&
+            n.attributes.srcset &&
+            n.attributes.rr_dataURL
+          ) {
+            // backup original img srcset
+            node.setAttribute(
+              'rrweb-original-srcset',
+              n.attributes.srcset as string,
+            );
           } else if (tagName === 'img' && n.attributes.src) {
             // backup original img srcset
             const path = new URL(
@@ -273,7 +282,6 @@ function buildNode(
           ) {
             const path = new URL(n.attributes.href, options.baseUrl).toString();
             n.attributes.href = path;
-            // ignore
           } else {
             node.setAttribute(name, value.toString());
           }
@@ -581,12 +589,6 @@ function rebuild(
     handleScroll(visitedNode, mirror);
   });
   return node;
-}
-
-function getRootId(doc: Document, mirror: Mirror): number | undefined {
-  if (!mirror.hasNode(doc)) return undefined;
-  const docId = mirror.getId(doc);
-  return docId === 1 ? undefined : docId;
 }
 
 export default rebuild;
